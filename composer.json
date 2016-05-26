@@ -1,0 +1,22 @@
+{
+    "name": "leoding86/simple-collector",
+    "description": "Use to collect content from other sites.",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Leo Ding",
+            "email": "leoding86@msn.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {
+        "php": ">=5.4",
+        "sunra/php-simple-html-dom-parser": "^1.5.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "leoding86\\SimpleCollector\\": "src/"
+        }
+    }
+}
