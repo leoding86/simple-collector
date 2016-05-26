@@ -1,2 +1,0 @@
-
-Fatal error: Call to a member function simplifyUrl() on null in D:\Workspace\Web\_test\collector\src\Collector.php on line 159
