@@ -35,7 +35,7 @@ class CollectorSelector extends FinderSelector
      */
     public function addReplacement($search, $replace, $mode = null)
     {
-        $mode = in_array($mode, [self::REPLACE_STRING, self::REPLACE_PATTERN]) ? $mode : self::REPLACE_STRING;
+        $mode = in_array($mode, [self::REPLACE_STRING, self::REPLACE_PATTERN]) ? $mode : null;
         $this->replacements[] = $this->createReplacement($search, $replace, $mode);
     }
 

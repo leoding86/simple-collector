@@ -67,6 +67,15 @@ class Collector extends Finder
             else if ($replacement->mode === $selector::REPLACE_PATTERN) {
                 $string = preg_replace($replacement->search, $replacement->replace, $string);
             }
+            /* Fallback */
+            else {
+                if (@preg_match($replacement->search, null) === false) {
+                    $string = str_replace($replacement->search, $replacement->replace, $string);
+                }
+                else {
+                    $string = preg_replace($replacement->search, $replacement->replace, $string);
+                }
+            }
         }
 
         return $string;
@@ -95,11 +104,20 @@ class Collector extends Finder
         return $urls;
     }
 
+    /**
+     * 设置是否需要下载图片
+     * @param boolean $boolean ture下载图片|false不下载图片
+     */
     public function setDownloadPictrue($boolean)
     {
         $this->downloadPicture = (bool)$boolean;
     }
 
+    /**
+     * 设置收集分析器
+     * 包括简化链接、转化链接、常规化链接等
+     * @param CollectorParser $parser 收集分析器实例
+     */
     public function setCollectorParser(CollectorParser $parser)
     {
         $this->CollectorParser = $parser;
@@ -182,23 +200,6 @@ class Collector extends Finder
         $this->urls[] = $url;
     }
 
-    public function getUrls()
-    {
-        return $this->urls;
-    }
-
-    /**
-     * 获得采集器的分析器
-     * @return CollectorParser 分析器类型或子类
-     */
-    public function getCollectorParser()
-    {
-        if (!$this->CollectorParser) {
-            $this->setCollectorParser(new CollectorParser());
-        }
-        return $this->CollectorParser;
-    }
-
     /**
      * 获得图片制造器
      * @return CollectorPictureMaker 图片制造器类型或子类
@@ -275,6 +276,7 @@ class Collector extends Finder
 
                 /* 判断采集内容是否有正文内容 */
                 if (isset($result[self::MAIN_CONTENT_SELECTOR_ID])) {
+                    /* 保存第一页内容 */
                     $paged_main_content[] = $result[self::MAIN_CONTENT_SELECTOR_ID];
 
                     /* 如果设置了分页分析器，则使用设定的分析器获得分页链接 */
@@ -318,6 +320,7 @@ class Collector extends Finder
                 }
                 unset($key, $item);
 
+                /* 遍历分页内容，并替换字符串 */
                 foreach ($paged_main_content as &$content) {
                     if ($this->contentSelector) {
                         $content = $this->replaceString($content, $this->contentSelector);

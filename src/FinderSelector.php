@@ -43,15 +43,17 @@ class FinderSelector
         $this->offset = $offset;
     }
 
-    public function setQuerySelector($query, $attr)
+    public function setQuerySelector($query, $attr, $offset = null)
     {
         $this->setQuery($query);
         $this->setAttr($attr);
+        if ($offset !== null) $this->setOffset((int)$offset);
     }
 
-    public function setWildcardSelector($wildcard, $wildcard_mark = '[[*]]')
+    public function setWildcardSelector($wildcard, $offset = null, $wildcard_mark = '[[*]]')
     {
         $this->setWildcard($wildcard);
+        if ($offset !== null) $this->setOffset((int)$offset);
         $this->setWildcardMark($wildcard_mark);
     }
 }
