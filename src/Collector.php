@@ -7,8 +7,8 @@ class Collector extends Finder
     const CONTENT_URL_SELECTOR_ID = '__CONTENT_URL_SELECTOR__';
     const MAIN_CONTENT_SELECTOR_ID = '__MAIN_CONTENT_SELECTOR__';
     const EVENTS = ['collect_content_success', 'collect_content_fail', 'collect_paged_main_content_success'];
-    const PAGES_INLINE = '__PAGES_INLINE__';
-    const PAGES_CONTEXT = '__PAGES_CONTEXT__';
+    const PAGES_INLINE = 'INLINE';
+    const PAGES_CONTEXT = 'CONTEXT';
 
     private $isInited;
     private $urls;
@@ -19,9 +19,9 @@ class Collector extends Finder
     private $contentSelectorIDAlias = null;
     private $contentPageMode = null;
     private $contentPagesSelector = null;
-    private $contentPagesParser = null;
-    private $CollectorParser = null;
 
+
+    private $collectorParser = null;
     private $pictureMaker = null;
 
     /**
@@ -82,29 +82,6 @@ class Collector extends Finder
     }
 
     /**
-     * 查找内容页分页链接
-     * @param  string          $html    html字符串
-     * @param  simple_html_dom $htmlDom simple_html_dom 对象
-     * @return array
-     */
-    final private function getContentInlinePages($html, $htmlDom)
-    {
-        $urls = [];
-        $page_html = $this->findBySelector($html, $htmlDom, $this->contentPagesSelector);
-
-        if ($page_html) {
-            $pattern = '/<a[^\/]+href=(?:"|\')(.+?)(?:"|\')[^\/]>/';
-            $match = [];
-            preg_match_all($pattern, $page_html, $match, PREG_SET_ORDER);
-            foreach ($match as $val) {
-                $urls[] = $val[1];
-            }
-        }
-
-        return $urls;
-    }
-
-    /**
      * 设置是否需要下载图片
      * @param boolean $boolean ture下载图片|false不下载图片
      */
@@ -120,12 +97,7 @@ class Collector extends Finder
      */
     public function setCollectorParser(CollectorParser $parser)
     {
-        $this->CollectorParser = $parser;
-    }
-
-    public function setContentPagesParser(/* callable */ $parser)
-    {
-        $this->contentPagesParser = $parser;
+        $this->collectorParser = $parser;
     }
 
     public function setMax($number)
@@ -218,11 +190,13 @@ class Collector extends Finder
      */
     public function init()
     {
-        if (!$this->CollectorParser) {
-            $this->CollectorParser = new CollectorParser();
+        if (!$this->collectorParser) {
+            /* 获得默认分析器 */
+            $this->collectorParser = new CollectorParser();
         }
 
         if (!$this->pictureMaker) {
+            /* 获得默认图片处理器 */
             $this->pictureMaker = new CollectorPictureMaker();
         }
 
@@ -242,12 +216,12 @@ class Collector extends Finder
         /* 遍历入口链接 */
         foreach ($this->urls as $url) {
             /* 分析入口链接 */
-            $this->CollectorParser->simplifyUrl($url);
+            $this->collectorParser->simplifyUrl($url);
             if ( ($result = $this->getResult($url)) !== false ) {
                 /* 遍历内链接 */
                 foreach ($result[self::CONTENT_URL_SELECTOR_ID] as $key => $_url) {
                     /* 处理页面内链接 */
-                    $result[self::CONTENT_URL_SELECTOR_ID][$key] = $this->CollectorParser->changeUrl($_url);
+                    $result[self::CONTENT_URL_SELECTOR_ID][$key] = $this->collectorParser->changeUrl($_url);
                 }
                 $content_urls = array_merge($content_urls, $result[self::CONTENT_URL_SELECTOR_ID]);
             }
@@ -266,7 +240,7 @@ class Collector extends Finder
 
         /* 所有入口链接 */
         foreach ($this->urls as $url) {
-            $this->CollectorParser->simplifyUrl($url);
+            $this->collectorParser->simplifyUrl($url);
 
             /* 初始化分页正文内容容器 */
             $paged_main_content = [];
@@ -274,42 +248,47 @@ class Collector extends Finder
             /* 获得内容入口页面内容 */
             if ( ($result = $this->getResult($url)) !== false) {
 
-                /* 判断采集内容是否有正文内容 */
+                /* 判断采集需要采集正文内容 */
                 if (isset($result[self::MAIN_CONTENT_SELECTOR_ID])) {
                     /* 保存第一页内容 */
                     $paged_main_content[] = $result[self::MAIN_CONTENT_SELECTOR_ID];
 
-                    /* 如果设置了分页分析器，则使用设定的分析器获得分页链接 */
-                    if ($this->contentPagesParser) {
-                        $page_urls = call_user_func_array($this->contentPagesParser, [$this->getHtml(), $this->getHtmlDom()]);
-                    }
-                    /** 
-                     * 如果没有设置分析器，则根据不同模式获得指定分页链接 
-                     * 分页列表模式
-                     **/
-                    else if ($this->contentPageMode === self::PAGES_INLINE) {
-                        $page_urls = $this->getContentInlinePages($this->html, $this->htmlDom);
-                    }
-                    /**
-                     * 上下文分页模式
-                     */
-                    else if ($this->contentPageMode === self::PAGES_CONTEXT) {
-                        throw new \Exception("This mode is not implement yet.", 1);
+                    try {
+                        $page_urls = $this->collectorParser->getContentPages($this->getHtml(), $this->getHtmlDom());
+                    } catch (Exception $e) {
+                        if ($this->contentPageMode === self::PAGES_INLINE) {
+                            $page_urls = $this->getContentInlinePages(
+                                $this->getHtml(),
+                                $this->getHtmlDom(),
+                                $this->contentPagesSelector
+                            );
+                        }
                     }
 
                     /* 内部查找实例，用于查找分页其他内容 */
                     $mainContentFinder = new Finder();
                     $mainContentFinder->addSelector(self::MAIN_CONTENT_SELECTOR_ID, $this->contentSelector);
-                    foreach ($page_urls as $key => $page_url) {
-                        // $current_url = $this->CollectorParser->changeUrl($page_url);
-                        $page_result = $mainContentFinder->getResult($this->CollectorParser->changeUrl($page_url));
 
-                        /* 判断是否存在内容 */
+                    while (count($page_urls) > 0) {
+                        $page_url = array_shift($page_urls);
+                        $page_result = $mainContentFinder->getResult($this->collectorParser->changeUrl($page_url));
+
                         if ($page_result[self::MAIN_CONTENT_SELECTOR_ID]) {
                             $paged_main_content[] = $result[self::MAIN_CONTENT_SELECTOR_ID];
                         }
+
+                        if (get_class($this->collectorParser) === __NAMESPACE__ . '\\CollectorParser' &&
+                            $this->contentPageMode === self::PAGES_CONTEXT) {
+                            if ($next_url = $this->collectorParser->getContentContextPage(
+                                    $this->getHtml(),
+                                    $this->getHtmlDom(),
+                                    $this->contentPagesSelector)
+                            ) {
+                                $page_urls[] = $next_url;
+                            }
+                        }
                     }
-                    unset($key, $page_url, $page_result, $result[self::MAIN_CONTENT_SELECTOR_ID]);
+                    unset($page_url, $next_url, $page_result, $result[self::MAIN_CONTENT_SELECTOR_ID]);
                 }
 
                 /* 处理替换工作 */
@@ -330,7 +309,7 @@ class Collector extends Finder
 
                 if ($paged_main_content) {
                     /* 创建闭包函数需要的实例 */
-                    $CollectorParser = $this->CollectorParser;
+                    $collectorParser = $this->collectorParser;
                     $pictureMaker = $this->pictureMaker;
                     $downloadPicture = $this->downloadPicture;
 
@@ -342,9 +321,15 @@ class Collector extends Finder
 
                         $content = preg_replace_callback(
                             '/<img\s[^>]*\ssrc="([^>]+?)"\s[^>]*\/?>/i',
-                            function ($match) use ($CollectorParser, $pictureMaker, &$content_pictures, &$paged_content_pictures, $downloadPicture) {
+                            function ($match) use (
+                                $collectorParser,
+                                $pictureMaker,
+                                &$content_pictures,
+                                &$paged_content_pictures,
+                                $downloadPicture
+                            ) {
                                 /* 补全图片链接 */
-                                $pic_url = $CollectorParser->changeUrl($match[1]);
+                                $pic_url = $collectorParser->changeUrl($match[1]);
 
                                 /* 如果需要下载图片，则替换为目标地址 */
                                 if ($downloadPicture) {
@@ -359,7 +344,7 @@ class Collector extends Finder
                         );
                         $this->dispatch('collect_paged_main_content_success', $url, $content, $paged_content_pictures);
                     }
-                    unset($CollectorParser, $pictureMaker, $downloadPicture, $content, $paged_content_pictures);
+                    unset($collectorParser, $pictureMaker, $downloadPicture, $content, $paged_content_pictures);
 
                     /* 替换别名 */
                     $result[$this->contentSelectorIDAlias] = Helper::formatContent(implode('', $paged_main_content));

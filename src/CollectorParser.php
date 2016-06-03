@@ -1,7 +1,7 @@
 <?php
 namespace leoding86\SimpleCollector;
 
-class CollectorParser
+class CollectorParser extends Finder
 {
     private $domain;
     private $protocol;
@@ -87,5 +87,50 @@ class CollectorParser
         }
         
         return $info['scheme'] . '://' . $info['host'] . '/' . implode('/', $new_parts);
+    }
+
+    /**
+     * 获得内联页面分页链接
+     * @param  string          $html     [description]
+     * @param  simple_html_dom $html_dom [description]
+     * @return array                     [description]
+     */
+    public function getContentInlinePages($html, $html_dom, FinderSelector $selector)
+    {
+        $urls = [];
+        $page_html = $this->findBySelector($html, $htmlDom, $selector);
+
+        if ($page_html) {
+            $pattern = '/<a[^\/]+href=(?:"|\')(.+?)(?:"|\')[^\/]>/';
+            $match = [];
+            preg_match_all($pattern, $page_html, $match, PREG_SET_ORDER);
+            foreach ($match as $val) {
+                $urls[] = $val[1];
+            }
+        }
+
+        return $urls;
+    }
+
+    /**
+     * 查找内容页下一页分页链接
+     * @param  string          $html    html字符串
+     * @param  simple_html_dom $htmlDom simple_html_dom 对象
+     * @return string
+     */
+    public function getContentContextPage($html, $html_dom, FinderSelector $selector)
+    {
+        throw new \Exception("CollectorParser::getContentContextPage is not implements", 1);
+    }
+
+    /**
+     * 查找内容页分页链接
+     * @param  string          $html    html字符串
+     * @param  simple_html_dom $htmlDom simple_html_dom 对象
+     * @return array
+     */
+    public function getContentPages($html, $html_dom)
+    {
+        throw new \Exception("CollectorParser::getContentPages is not implements", 1);
     }
 }
